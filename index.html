@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#222" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f94a.png" type="image/png" />
+  <link rel="stylesheet" href="style.css" />
+  <title>Touch Grass, Kick Ass: by Schopfer</title>
+</head>
+<body>
+  <div class="container">
+    <h1>🥊 Touch Grass, Kick Ass: by Schopfer</h1>
+    <div id="notification" class="notification hidden"></div>
+    <form id="config-form">
+      <h2 class="section-header">Warm-Up</h2>
+      <div class="input-group">
+        <label>Work Duration (seconds): <input type="number" id="work-duration" min="30" max="300" value="120" required></label>
+      </div>
+      <div class="input-group">
+        <label>Rest Duration (seconds): <input type="number" id="rest-duration" min="10" max="300" value="30" required></label>
+      </div>
+      <div class="input-group">
+        <label><input type="checkbox" id="enable-warmup"> Enable Warm-Up</label>
+      </div>
+      <div class="input-group fade-group hidden" id="warmup-fields">
+        <div class="flex-row">
+          <label>Warm-Up YouTube URL: <input type="text" id="warmup-url"></label>
+        </div>
+        <div class="flex-row">
+          <label>Start Time: <input type="text" id="warmup-start" placeholder="mm:ss or seconds"></label>
+          <label>Duration: <input type="number" id="warmup-duration" min="10" max="1800" value="60"> seconds</label>
+        </div>
+      </div>
+      <h2 class="section-header">Main Workout</h2>
+      <div class="input-group">
+        <label>Rounds: <input type="number" id="rounds" min="1" max="20" value="3" required></label>
+      </div>
+      <h2 class="section-header">Cool-Down</h2>
+      <div class="input-group">
+        <label><input type="checkbox" id="enable-cooldown"> Enable Cool-Down</label>
+      </div>
+      <div class="input-group fade-group hidden" id="cooldown-fields">
+        <div class="flex-row">
+          <label>Cool-Down YouTube URL: <input type="text" id="cooldown-url"></label>
+        </div>
+        <div class="flex-row">
+          <label>Start Time: <input type="text" id="cooldown-start" placeholder="mm:ss or seconds"></label>
+          <label>Duration: <input type="number" id="cooldown-duration" min="10" max="1800" value="60"> seconds</label>
+        </div>
+      </div>
+      <h2 class="section-header">Rounds</h2>
+      <div class="input-group">
+        <label>YouTube Video URL & Start Time for Each Round:</label>
+        <div id="youtube-links"></div>
+        <button type="button" id="fill-links" class="secondary-btn">🔁 Auto-fill with same video</button>
+        <small>Enter start time as mm:ss or seconds (optional)</small>
+      </div>
+      <div class="input-group">
+        <label>Rest Phase Media (YouTube URL or leave blank for silence): <input type="text" id="rest-media"></label>
+        <label>Rest Start Time: <input type="text" id="rest-start-time" placeholder="mm:ss or seconds"></label>
+      </div>
+      <h2 class="section-header">Cues & Settings</h2>
+      <div class="input-group">
+        <label>Audio Cue:
+          <select id="audio-cue">
+            <option value="none">None</option>
+            <option value="ding">Ding</option>
+            <option value="horn">Horn</option>
+            <option value="countdown">Countdown</option>
+          </select>
+          <input type="checkbox" id="cue-enabled" checked> Enable cue
+        </label>
+        <label>Cue Timing: <input type="number" id="cue-timing" min="1" max="300" value="10" style="width:60px;"> seconds before phase ends</label>
+      </div>
+      <button type="submit" id="start" class="primary-btn">▶️ Start Workout</button>
+    </form>
+    <div id="preset-controls" style="text-align:center; margin-top:1em;">
+      <button id="save-preset">Save Workout</button>
+      <button id="load-preset">Load Workout</button>
+    </div>
+    <input type="file" id="import-preset" style="display:none;" />
+    <div id="timer-area" class="hidden">
+      <div id="phase-display"></div>
+      <div id="round-display"></div>
+      <div id="time-display"></div>
+      <div id="controls">
+        <button id="pause">Pause</button>
+        <button id="resume" class="hidden">Resume</button>
+        <button id="reset">Reset</button>
+      </div>
+      <div id="youtube-player"></div>
+      <audio id="audio-cue-player" preload="auto"></audio>
+    </div>
+    <div id="fallback" class="hidden"></div>
+  </div>
+  <script src="main.js"></script>
+</body>
+</html>
