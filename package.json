@@ -1,0 +1,14 @@
+{
+  "name": "kick-ass-timer",
+  "version": "1.0.0",
+  "description": "Kick Ass Timer PWA",
+  "main": "index.js",
+  "scripts": {
+    "generate-icons": "node process-icon.js",
+    "postinstall": "npm run generate-icons"
+  },
+  "dependencies": {
+    "sharp": "^0.33.2"
+  },
+  "type": "module"
+}

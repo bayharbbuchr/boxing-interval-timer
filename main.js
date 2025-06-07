@@ -22,6 +22,10 @@ let audioCuePlayer = null;
 let pausedAt = 0;
 let phase = 'work'; // 'work' or 'rest'
 
+// --- WORKOUT STORAGE ---
+const WORKOUTS_STORAGE_KEY = 'savedWorkouts';
+let savedWorkouts = JSON.parse(localStorage.getItem(WORKOUTS_STORAGE_KEY) || '{}');
+
 // --- DOM ---
 const form = document.getElementById('config-form');
 const youtubeLinksDiv = document.getElementById('youtube-links');
@@ -490,7 +494,344 @@ function parseStartTime(val) {
   return 0;
 }
 
+// --- WORKOUT MANAGEMENT ---
+function saveWorkout(name, config) {
+  try {
+    if (!name) {
+      throw new Error('Workout name is required');
+    }
+    
+    // Add timestamp to the config
+    config.timestamp = Date.now();
+    
+    // Save to localStorage
+    savedWorkouts[name] = config;
+    localStorage.setItem(WORKOUTS_STORAGE_KEY, JSON.stringify(savedWorkouts));
+    
+    return true;
+  } catch (error) {
+    console.error('Error in saveWorkout:', error);
+    showNotification('Failed to save workout');
+    return false;
+  }
+}
+
+function deleteWorkout(name) {
+  if (confirm(`Delete workout "${name}"?`)) {
+    delete savedWorkouts[name];
+    localStorage.setItem(WORKOUTS_STORAGE_KEY, JSON.stringify(savedWorkouts));
+    renderSavedWorkouts();
+    showNotification(`Workout "${name}" deleted`);
+  }
+}
+
+function loadWorkout(config) {
+  try {
+    // Use setTimeout to prevent UI freezing
+    setTimeout(() => {
+      try {
+        // Update form fields with saved workout data
+        document.getElementById('work-duration').value = config.workDuration || 120;
+        document.getElementById('rest-duration').value = config.restDuration || 30;
+        document.getElementById('rounds').value = config.rounds || 3;
+        document.getElementById('rest-media').value = config.restMedia || 'beep';
+        document.getElementById('rest-start-time').value = config.restStartTime || '0:00';
+        document.getElementById('audio-cue').value = config.cueType || 'beep';
+        document.getElementById('cue-enabled').checked = config.cueEnabled !== false;
+        document.getElementById('cue-timing').value = config.cueTiming || 3;
+        
+        // Handle warmup
+        const warmupEnabled = !!config.warmup;
+        document.getElementById('enable-warmup').checked = warmupEnabled;
+        document.getElementById('warmup-fields').classList.toggle('hidden', !warmupEnabled);
+        if (warmupEnabled) {
+          document.getElementById('warmup-url').value = config.warmup.url || '';
+          document.getElementById('warmup-start').value = config.warmup.startTime || '0:00';
+          document.getElementById('warmup-duration').value = config.warmup.duration || 60;
+        }
+        
+        // Handle cooldown
+        const cooldownEnabled = !!config.cooldown;
+        document.getElementById('enable-cooldown').checked = cooldownEnabled;
+        document.getElementById('cooldown-fields').classList.toggle('hidden', !cooldownEnabled);
+        if (cooldownEnabled) {
+          document.getElementById('cooldown-url').value = config.cooldown.url || '';
+          document.getElementById('cooldown-start').value = config.cooldown.startTime || '0:00';
+          document.getElementById('cooldown-duration').value = config.cooldown.duration || 300;
+        }
+        
+        // Update YouTube inputs
+        const rounds = parseInt(config.rounds || 3, 10);
+        renderYouTubeInputs(rounds);
+        
+        // Use a small delay to ensure inputs are rendered
+        setTimeout(() => {
+          try {
+            // Fill in YouTube links
+            if (config.workLinks && config.workLinks.length > 0) {
+              const inputs = document.querySelectorAll('.youtube-link');
+              inputs.forEach((input, index) => {
+                if (index < config.workLinks.length) {
+                  input.value = config.workLinks[index].url || '';
+                  const timeInput = input.parentNode.parentNode.querySelector('.start-time');
+                  if (timeInput) {
+                    timeInput.value = config.workLinks[index].startTime || '';
+                  }
+                }
+              });
+            }
+            
+            showNotification(`Loaded "${config.name || 'workout'}"`);
+          } catch (innerError) {
+            console.error('Error filling YouTube links:', innerError);
+            showNotification('Error loading workout links');
+          }
+        }, 50);
+        
+      } catch (error) {
+        console.error('Error in loadWorkout:', error);
+        showNotification('Error loading workout');
+      } finally {
+        closeModal();
+      }
+    }, 0);
+  } catch (error) {
+    console.error('Error scheduling loadWorkout:', error);
+    showNotification('Error loading workout');
+    closeModal();
+  }
+}
+
+function renderSavedWorkouts() {
+  const container = document.getElementById('saved-workouts-list');
+  container.innerHTML = '';
+  
+  const workouts = JSON.parse(localStorage.getItem(WORKOUTS_STORAGE_KEY) || '{}');
+  
+  if (Object.keys(workouts).length === 0) {
+    container.innerHTML = '<p>No saved workouts found</p>';
+    return;
+  }
+  
+  // Sort by most recent first
+  const sortedWorkouts = Object.entries(workouts).sort((a, b) => 
+    (b[1].timestamp || 0) - (a[1].timestamp || 0)
+  );
+  
+  sortedWorkouts.forEach(([name, workout]) => {
+    const workoutEl = document.createElement('div');
+    workoutEl.style.display = 'flex';
+    workoutEl.style.justifyContent = 'space-between';
+    workoutEl.style.alignItems = 'center';
+    workoutEl.style.padding = '10px';
+    workoutEl.style.margin = '5px 0';
+    workoutEl.style.background = '#444';
+    workoutEl.style.borderRadius = '4px';
+    
+    const nameEl = document.createElement('span');
+    nameEl.textContent = name;
+    
+    const btnContainer = document.createElement('div');
+    
+    const loadBtn = document.createElement('button');
+    loadBtn.textContent = 'Load';
+    loadBtn.style.marginLeft = '10px';
+    loadBtn.style.padding = '2px 8px';
+    loadBtn.onclick = () => {
+      loadWorkout({ ...workout, name });
+    };
+    
+    const deleteBtn = document.createElement('button');
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.style.marginLeft = '10px';
+    deleteBtn.style.padding = '2px 8px';
+    deleteBtn.onclick = () => {
+      if (confirm(`Delete "${name}"?`)) {
+        deleteWorkout(name);
+        renderSavedWorkouts();
+      }
+    };
+    
+    btnContainer.appendChild(loadBtn);
+    btnContainer.appendChild(deleteBtn);
+    workoutEl.appendChild(nameEl);
+    workoutEl.appendChild(btnContainer);
+    container.appendChild(workoutEl);
+  });
+}
+
+// --- MODAL CONTROLS ---
+const modal = document.getElementById('workout-modal');
+const closeBtn = document.querySelector('.close');
+let isModalOpen = false;
+
+function openModal(mode = 'save') { // 'save' or 'load'
+  if (isModalOpen) return;
+  isModalOpen = true;
+  
+  // Show the modal
+  modal.style.display = 'block';
+  
+  if (mode === 'load') {
+    document.getElementById('save-workout-view').style.display = 'none';
+    document.getElementById('load-workout-view').style.display = 'block';
+    // Use setTimeout to prevent blocking the UI
+    setTimeout(() => renderSavedWorkouts(), 0);
+  } else {
+    document.getElementById('save-workout-view').style.display = 'block';
+    document.getElementById('load-workout-view').style.display = 'none';
+    document.getElementById('workout-name').value = '';
+    // Focus the input field when opening save modal
+    setTimeout(() => document.getElementById('workout-name').focus(), 0);
+  }
+}
+
+function closeModal() {
+  if (!isModalOpen) return;
+  isModalOpen = false;
+  modal.style.display = 'none';
+  delete document.getElementById('save-workout-view').dataset.workoutConfig;
+}
+
+// Handle modal close events
+closeBtn.addEventListener('click', closeModal);
+modal.addEventListener('click', (event) => {
+  if (event.target === modal) {
+    closeModal();
+  }
+});
+
+// Close modal with Escape key
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && isModalOpen) {
+    closeModal();
+  }
+});
+
+// --- PWA INSTALLATION ---
+let deferredPrompt;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  // Prevent the mini-infobar from appearing on mobile
+  e.preventDefault();
+  // Stash the event so it can be triggered later
+  deferredPrompt = e;
+  // Show the install button if you have one
+  // For example: document.getElementById('installButton').style.display = 'block';
+});
+
+// Register Service Worker
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(registration => {
+        console.log('ServiceWorker registration successful');
+      })
+      .catch(err => {
+        console.log('ServiceWorker registration failed: ', err);
+      });
+  });
+}
+
 // --- INITIAL RENDER ---
 renderYouTubeInputs(parseInt(roundsInput.value, 10));
 updateUI();
 loadYouTubeAPI();
+
+// Initialize modal event listeners when DOM is fully loaded
+document.addEventListener('DOMContentLoaded', () => {
+  // Save workout button
+  document.getElementById('save-preset').addEventListener('click', () => {
+    // Gather current workout config
+    const config = {
+      name: '', // Will be set when saving
+      timestamp: Date.now(),
+      workDuration: parseInt(document.getElementById('work-duration').value, 10),
+      restDuration: parseInt(document.getElementById('rest-duration').value, 10),
+      rounds: parseInt(document.getElementById('rounds').value, 10),
+      restMedia: document.getElementById('rest-media').value,
+      restStartTime: document.getElementById('rest-start-time').value,
+      cueType: document.getElementById('audio-cue').value,
+      cueEnabled: document.getElementById('cue-enabled').checked,
+      cueTiming: parseInt(document.getElementById('cue-timing').value, 10),
+      workLinks: []
+    };
+    
+    // Get YouTube links for each round
+    const linkInputs = document.querySelectorAll('.youtube-link');
+    linkInputs.forEach(input => {
+      const timeInput = input.parentNode.parentNode.querySelector('.start-time');
+      config.workLinks.push({
+        url: input.value,
+        startTime: timeInput ? timeInput.value : ''
+      });
+    });
+    
+    // Handle warmup if enabled
+    if (document.getElementById('enable-warmup').checked) {
+      config.warmup = {
+        url: document.getElementById('warmup-url').value,
+        startTime: document.getElementById('warmup-start').value,
+        duration: parseInt(document.getElementById('warmup-duration').value, 10)
+      };
+    }
+    
+    // Handle cooldown if enabled
+    if (document.getElementById('enable-cooldown').checked) {
+      config.cooldown = {
+        url: document.getElementById('cooldown-url').value,
+        startTime: document.getElementById('cooldown-start').value,
+        duration: parseInt(document.getElementById('cooldown-duration').value, 10)
+      };
+    }
+    
+    // Store the config in a data attribute for when we get the name
+    document.getElementById('save-workout-view').dataset.workoutConfig = JSON.stringify(config);
+    
+    // Show the save modal
+    openModal('save');
+  });
+
+  // Load workout button
+  document.getElementById('load-preset').addEventListener('click', () => {
+    openModal('load');
+  });
+
+  // Confirm save button
+  document.getElementById('confirm-save').addEventListener('click', () => {
+    const nameInput = document.getElementById('workout-name');
+    const name = nameInput.value.trim();
+    const configStr = document.getElementById('save-workout-view').dataset.workoutConfig;
+    
+    if (!name) {
+      showNotification('Please enter a name for your workout');
+      nameInput.focus();
+      return;
+    }
+    
+    if (!configStr) {
+      showNotification('Error: Workout configuration not found');
+      closeModal();
+      return;
+    }
+    
+    try {
+      const config = JSON.parse(configStr);
+      config.name = name; // Ensure name is set
+      
+      // Use setTimeout to prevent UI freeze
+      setTimeout(() => {
+        if (saveWorkout(name, config)) {
+          showNotification(`Workout "${name}" saved!`);
+          closeModal();
+        }
+      }, 0);
+    } catch (error) {
+      console.error('Error saving workout:', error);
+      showNotification('Error saving workout');
+      closeModal();
+    }
+  });
+});
+
+// --- EVENT LISTENERS ---
