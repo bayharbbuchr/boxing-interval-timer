@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kick-ass-timer-v1';
+const CACHE_NAME = 'kick-ass-timer-v4-gunshots';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',

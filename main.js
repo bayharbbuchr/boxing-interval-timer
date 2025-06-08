@@ -99,6 +99,7 @@ function extractYouTubeID(url) {
 
 // --- AUDIO CUE CONTROL ---
 function playCue(type) {
+  console.log(`playCue called with type: ${type}, phase: ${phase}, timerState: ${timerState}`);
   if (!type || type === 'none') return;
   // Use both .wav and .mp3 sources for best compatibility
   audioCue.innerHTML = `
@@ -108,6 +109,56 @@ function playCue(type) {
   audioCue.load();
   audioCue.currentTime = 0;
   audioCue.play();
+}
+
+// --- ROUND START AUDIO CUE ---
+function playRoundStartCue(roundNumber, phaseType = 'work') {
+  const phaseText = phaseType === 'work' ? `Round ${roundNumber}` : `Round ${roundNumber} Rest`;
+  console.log(`Playing round start cue for ${phaseText}`);
+  
+  // Play the mandatory "Hostiles Eliminated" sound first
+  const roundStartAudio = new Audio();
+  roundStartAudio.src = 'audio-cues/round-start.mp3';
+  roundStartAudio.currentTime = 0;
+  roundStartAudio.volume = 0.8;
+  
+  // Play the "Hostiles Eliminated" sound immediately
+  roundStartAudio.play().then(() => {
+    console.log('Hostiles Eliminated audio playing successfully');
+  }).catch(e => {
+    console.log('Hostiles Eliminated audio failed to play:', e);
+  });
+  
+  // After the "Hostiles Eliminated" sound finishes, play the gunshot sequence
+  setTimeout(() => {
+    const isRest = phaseType === 'rest';
+    playGunshotSequence(roundNumber, isRest);
+  }, 1200); // Wait for "Hostiles Eliminated" to finish (it's about 1 second long)
+}
+
+// New gunshot sequence function - replaces TTS announcements
+function playGunshotSequence(roundNumber, isRest = false) {
+  console.log(`Playing ${roundNumber} gunshots for ${isRest ? 'rest' : 'workout'} round`);
+  
+  // Choose the appropriate gunshot sound
+  const gunshotFile = isRest ? 'silenced-gunshot.mp3' : 'single-pistol-gunshot.mp3';
+  const gunshotPath = `audio-cues/${gunshotFile}`;
+  
+  // Play gunshots with 400ms spacing
+  for (let i = 0; i < roundNumber; i++) {
+    setTimeout(() => {
+      const gunshot = new Audio();
+      gunshot.src = gunshotPath;
+      gunshot.currentTime = 0;
+      gunshot.volume = 0.8;
+      
+      gunshot.play().then(() => {
+        console.log(`Gunshot ${i + 1}/${roundNumber} played (${isRest ? 'silenced' : 'pistol'})`);
+      }).catch(e => {
+        console.log(`Gunshot ${i + 1} failed to play:`, e);
+      });
+    }, i * 400); // 400ms spacing between shots
+  }
 }
 
 // --- TIMER ENGINE ---
@@ -141,17 +192,27 @@ function startMainWorkout() {
   currentRound = 1;
   cuePlayed = false;
   updateUI();
+  
+  // Play mandatory round start cue for Round 1
+  playRoundStartCue(currentRound);
+  
+  // Start the YouTube video/music immediately (no delay)
   playPhaseMedia();
   runCountdown(workDuration);
 }
 function runCountdown(sec) {
   remaining = sec;
   updateUI();
+  console.log(`Starting countdown: phase=${phase}, duration=${sec}, cueEnabled=${cueEnabled}, cueType=${cueType}, cueTiming=${window.cueTiming}`);
   timer = setInterval(() => {
     if (timerState === 'paused') return;
     remaining--;
-    // Play cue X seconds before transition
+    // Optional cue system - plays X seconds before phase ends (user configurable)
+    if (remaining === window.cueTiming && !cuePlayed) {
+      console.log(`Cue timing reached: remaining=${remaining}, cueTiming=${window.cueTiming}, cueEnabled=${cueEnabled}, cueType=${cueType}, cuePlayed=${cuePlayed}`);
+    }
     if (cueEnabled && cueType !== 'none' && remaining === window.cueTiming && !cuePlayed) {
+      console.log(`Playing optional cue: phase=${phase}, remaining=${remaining}, cueTiming=${window.cueTiming}, cueType=${cueType}`);
       playCue(cueType);
       cuePlayed = true;
     }
@@ -169,20 +230,21 @@ function nextPhase() {
     startMainWorkout();
   } else if (phase === 'work') {
     // End of work, go to rest
+    console.log(`Transitioning from work to rest - Round ${currentRound}`);
     stopYouTube();
+    phase = 'rest';
+    timerState = 'rest';
+    
+    // Play mandatory round start cue for rest period
+    console.log(`About to play rest round cue for round ${currentRound}`);
+    playRoundStartCue(currentRound, 'rest');
+    
     if (restIsYouTube && restMedia) {
-      phase = 'rest';
-      timerState = 'rest';
       playYouTube(restMedia, window.restStartTime || 0);
     } else if (restIsAudio && restMedia) {
-      phase = 'rest';
-      timerState = 'rest';
       audioCue.src = restMedia;
       audioCue.loop = true;
       audioCue.play();
-    } else {
-      phase = 'rest';
-      timerState = 'rest';
     }
     runCountdown(restDuration);
   } else if (phase === 'rest') {
@@ -207,6 +269,12 @@ function nextPhase() {
     } else {
       phase = 'work';
       timerState = 'work';
+      cuePlayed = false; // Reset for the new round's end-of-phase cue
+      
+      // Play mandatory round start cue for new round
+      playRoundStartCue(currentRound);
+      
+      // Start the YouTube video/music immediately (no delay)
       playPhaseMedia();
       runCountdown(workDuration);
     }
@@ -224,6 +292,7 @@ function playPhaseMedia() {
 function finishWorkout() {
   timerState = 'finished';
   stopYouTube();
+  // Play completion cue
   playCue(cueType !== 'none' ? cueType : 'ding');
   updateUI();
 }
@@ -413,11 +482,11 @@ document.getElementById('load-preset').addEventListener('click', () => {
     renderYouTubeInputs(parseInt(preset.rounds, 10));
     // Save for after render
     window._presetRestore = {workLinks: preset.workLinks, workStartTimes: preset.workStartTimes};
-    // Set rest and cues
+    // Set rest and cues (CUES DISABLED FOR TESTING)
     document.getElementById('rest-media').value = preset.restMedia || '';
     document.getElementById('rest-start-time').value = preset.restStartTime || '';
-    document.getElementById('audio-cue').value = preset.cueType || 'none';
-    document.getElementById('cue-enabled').checked = !!preset.cueEnabled;
+    document.getElementById('audio-cue').value = 'none'; // FORCE DISABLE
+    document.getElementById('cue-enabled').checked = false; // FORCE DISABLE
     document.getElementById('cue-timing').value = preset.cueTiming || 10;
     // Repopulate dynamic fields
     setTimeout(() => {
@@ -459,6 +528,7 @@ form.addEventListener('submit', (e) => {
   cueEnabled = document.getElementById('cue-enabled').checked;
   window.cueTiming = parseInt(document.getElementById('cue-timing').value, 10) || 10;
   cuePlayed = false;
+  console.log(`Form submission - cueType: ${cueType}, cueEnabled: ${cueEnabled}, cueTiming: ${window.cueTiming}`);
   // Detect rest media type
   restIsYouTube = restMedia && extractYouTubeID(restMedia);
   restIsAudio = restMedia && !restIsYouTube;
@@ -536,7 +606,7 @@ function loadWorkout(config) {
         document.getElementById('rounds').value = config.rounds || 3;
         document.getElementById('rest-media').value = config.restMedia || 'beep';
         document.getElementById('rest-start-time').value = config.restStartTime || '0:00';
-        document.getElementById('audio-cue').value = config.cueType || 'beep';
+        document.getElementById('audio-cue').value = config.cueType || 'none';
         document.getElementById('cue-enabled').checked = config.cueEnabled !== false;
         document.getElementById('cue-timing').value = config.cueTiming || 3;
         
@@ -573,7 +643,7 @@ function loadWorkout(config) {
               inputs.forEach((input, index) => {
                 if (index < config.workLinks.length) {
                   input.value = config.workLinks[index].url || '';
-                  const timeInput = input.parentNode.parentNode.querySelector('.start-time');
+                  const timeInput = input.parentNode.querySelector('.youtube-start');
                   if (timeInput) {
                     timeInput.value = config.workLinks[index].startTime || '';
                   }
@@ -720,7 +790,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
   // For example: document.getElementById('installButton').style.display = 'block';
 });
 
-// Register Service Worker
+// Register Service Worker for PWA functionality
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
@@ -760,7 +830,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Get YouTube links for each round
     const linkInputs = document.querySelectorAll('.youtube-link');
     linkInputs.forEach(input => {
-      const timeInput = input.parentNode.parentNode.querySelector('.start-time');
+      const timeInput = input.parentNode.querySelector('.youtube-start');
       config.workLinks.push({
         url: input.value,
         startTime: timeInput ? timeInput.value : ''
